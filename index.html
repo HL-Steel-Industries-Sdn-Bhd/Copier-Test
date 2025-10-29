@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>TV — Link & Copy</title>
+  <style>
+    :root{--bg:#0b1220;--card:#0f1724;--accent:#0ea5a4;--text:#e6eef6}
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",Arial}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,var(--bg),#07101a);color:var(--text)}
+    .wrap{width:100%;max-width:1100px;padding:28px;box-sizing:border-box}
+    .card{background:var(--card);border-radius:16px;padding:28px;display:flex;flex-direction:column;gap:18px;align-items:center;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    h1{font-size:28px;margin:0}
+    .links-row{display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center}
+    .link-pill{display:inline-flex;align-items:center;gap:12px;padding:14px 18px;border-radius:12px;background:rgba(255,255,255,0.04);backdrop-filter:blur(2px);min-width:520px;max-width:calc(100% - 40px);overflow:hidden}
+    .url-text{font-size:16px;line-height:1.2;color:var(--text);word-break:break-all}
+    .btn{appearance:none;border:0;padding:12px 16px;border-radius:10px;font-size:16px;cursor:pointer}
+    .btn-copy{background:var(--accent);color:#042026}
+    .btn-open{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,0.06)}
+    .notice{font-size:14px;opacity:0.9}
+    /* Large TV-friendly sizes when screen is big */
+    @media (min-width:1200px){
+      h1{font-size:36px}
+      .link-pill{min-width:820px;padding:20px 24px}
+      .url-text{font-size:20px}
+      .btn{font-size:18px;padding:14px 18px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" role="main">
+      <h1>快速打开 / 复制 链接</h1>
+      <div class="links-row" aria-live="polite">
+        <div class="link-pill" id="linkPill">
+          <div style="flex:1;">
+            <div class="url-text" id="urlText">https://script.google.com/macros/s/AKfycbz7xTlSAxub0hLcCWp6O7_pPtkYWBmLyKfipvcSbNAt9D4490IGgpMgZnpWjEu4tR7Bhg/exec</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn btn-open" id="openBtn" type="button">打开</button>
+            <button class="btn btn-copy" id="copyBtn" type="button">复制</button>
+          </div>
+        </div>
+      </div>
+      <div class="notice" id="notice">提示：部分电视浏览器不支持自动复制。如果“复制”不能工作，请长按上方链接文本并选择“复制”。</div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const url = document.getElementById('urlText').textContent.trim();
+      const copyBtn = document.getElementById('copyBtn');
+      const openBtn = document.getElementById('openBtn');
+      const notice = document.getElementById('notice');
+      const linkPill = document.getElementById('linkPill');
+
+      async function doCopy(){
+        // Preferred modern clipboard API
+        try{
+          if(navigator.clipboard && navigator.clipboard.writeText){
+            await navigator.clipboard.writeText(url);
+            showTemp('已复制到剪贴板 ✅');
+            return true;
+          }
+        }catch(e){
+          // ignore and try fallback
+        }
+        // Fallback: create a temporary textarea, select and execCommand('copy')
+        try{
+          const ta = document.createElement('textarea');
+          ta.value = url;
+          // place off-screen
+          ta.style.position = 'fixed'; ta.style.left = '-9999px'; ta.style.top = '0';
+          document.body.appendChild(ta);
+          ta.focus(); ta.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if(ok){ showTemp('已复制到剪贴板 ✅'); return true; }
+        }catch(e){/* ignore */}
+        // Last resort: select text so user can long-press copy
+        selectTextForManualCopy();
+        showTemp('复制失败 — 已高亮文本，长按选择并复制。');
+        return false;
+      }
+
+      function selectTextForManualCopy(){
+        // create contenteditable div to select on TVs that support selection
+        let selDiv = document.getElementById('manualCopyArea');
+        if(!selDiv){
+          selDiv = document.createElement('div');
+          selDiv.id = 'manualCopyArea';
+          selDiv.contentEditable = 'true';
+          selDiv.style.position='fixed'; selDiv.style.left='10px'; selDiv.style.top='10px'; selDiv.style.opacity='0.01';
+          selDiv.textContent = url;
+          document.body.appendChild(selDiv);
+        }
+        const range = document.createRange();
+        range.selectNodeContents(selDiv);
+        const sel = window.getSelection();
+        sel.removeAllRanges(); sel.addRange(range);
+      }
+
+      function showTemp(msg){
+        const prev = notice.textContent;
+        notice.textContent = msg;
+        setTimeout(()=>{ notice.textContent = prev; }, 3500);
+      }
+
+      copyBtn.addEventListener('click', (e)=>{ doCopy(); });
+      openBtn.addEventListener('click', ()=>{
+        // try open in new tab/window; on TV browsers may open in same tab
+        try{ window.open(url, '_blank'); }catch(e){ window.location.href = url; }
+      });
+
+      // Allow pressing Enter/OK on linkPill to open
+      linkPill.tabIndex = 0;
+      linkPill.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openBtn.click(); }
+      });
+
+      // if tv remote doesn't support pointer, make the whole pill clickable to open
+      linkPill.addEventListener('click', (ev)=>{ if(ev.target === linkPill) openBtn.click(); });
+
+      // On first load, try to focus the pill so remote's directional keys work immediately
+      setTimeout(()=>{ try{ linkPill.focus(); }catch(e){} }, 300);
+
+    })();
+  </script>
+</body>
+</html>
